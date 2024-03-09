@@ -113,7 +113,14 @@ void ktmeMixerMixPull(ktmeMixer *mixer, size_t numFrames, ktmeFrameS32 *frames) 
         size_t framesLeft    = numFrames;
         while (framesLeft != 0) {
             size_t framesProcessed = framesLeft > mixer->m_mixBufferSize ? mixer->m_mixBufferSize : framesLeft;
-            ktmeChannelPullAudioData(chan, framesProcessed, mixer->m_mixBuffer);
+
+            ktmeStatus status = ktmeChannelPullAudioData(chan, framesProcessed, mixer->m_mixBuffer);
+
+            // KTME_STATUS_NO_DATA is technically not a failure,
+            // but it aborts mixing for this channel
+            if (status != KTME_STATUS_OK) {
+                break;
+            }
 
             for (size_t j = 0; j < framesProcessed; j++) {
                 frames[j + currentOffset].left =

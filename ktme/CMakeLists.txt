@@ -13,8 +13,10 @@ add_library(ktme STATIC
         ktmeEngine.h
         ktmeAudioOut.h
         ktmeAudioOut.c
-        ktmeAudioSource.cpp
-        ktmeAudioSource.h)
+        ktmeAudioSource.c
+        ktmeAudioSource.h
+        ktmeAudioDecoder.c
+        ktmeAudioDecoder.h)
 
 if (portaudio_FOUND)
     target_link_libraries(ktme PUBLIC portaudio)

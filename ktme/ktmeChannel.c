@@ -1,7 +1,5 @@
 #include "ktmeChannelP.h"
 
-#include <string.h>
-
 void ktmeChannelInit(ktmeChannel *chan) {
     chan->m_status = KTME_CHANNEL_STATUS_FREE;
 
@@ -13,14 +11,12 @@ void ktmeChannelFree(ktmeChannel *chan) {
     chan->m_status = KTME_CHANNEL_STATUS_FREE;
 }
 
-void ktmeChannelPullAudioData(ktmeChannel *chan, size_t numFrames, ktmeFrameS32 *frames) {
+ktmeStatus ktmeChannelPullAudioData(ktmeChannel *chan, size_t numFrames, ktmeFrameS32 *frames) {
     // TODO: actually pull data instead of generating noise
 
     if (chan->m_status == KTME_CHANNEL_STATUS_PAUSED ||
         chan->m_status == KTME_CHANNEL_STATUS_FREE) {
-
-        memset(frames, 0, sizeof(ktmeFrameS32) * numFrames);
-        return; // TODO: maybe skip mixing?
+        return KTME_STATUS_NO_DATA;
     }
 
     uint32_t x = 1;
@@ -44,4 +40,6 @@ void ktmeChannelPullAudioData(ktmeChannel *chan, size_t numFrames, ktmeFrameS32 
 
         // TODO: pan
     }
+
+    return KTME_STATUS_OK;
 }

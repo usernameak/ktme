@@ -2,6 +2,13 @@
 
 #include <stddef.h>
 
+typedef enum ktmeStatus {
+    KTME_STATUS_OK = 0,
+
+    KTME_STATUS_NO_DATA,
+    KTME_STATUS_UNSUPPORTED
+} ktmeStatus;
+
 typedef struct ktmeEngineSysFuncs {
     void *(*memAlloc)(size_t size);
     void (*memFree)(void *ptr);
