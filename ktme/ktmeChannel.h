@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include "ktmeAudioSource.h"
 
 typedef enum ktmeChannelStatus {
     KTME_CHANNEL_STATUS_FREE,
@@ -13,4 +13,8 @@ typedef struct ktmeChannel {
 
     uint16_t m_volume;
     int16_t m_panning;
+
+    ktmeAudioSourceBase *m_audioSource;
 } ktmeChannel;
+
+void ktmeChannelSetAudioSource(ktmeChannel *chan, ktmeAudioSourceBase *source);

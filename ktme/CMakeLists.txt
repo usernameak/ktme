@@ -13,7 +13,6 @@ add_library(ktme STATIC
         ktmeEngine.h
         ktmeAudioOut.h
         ktmeAudioOut.c
-        ktmeAudioSource.c
         ktmeAudioSource.h
         ktmeAudioDecoder.c
         ktmeAudioDecoder.h

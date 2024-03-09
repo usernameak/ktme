@@ -6,9 +6,9 @@
 typedef struct ktmeAudioSourceBase ktmeAudioSourceBase;
 
 #define KTME_AUDIO_SOURCE_BASE_FUNCS                                                             \
-    ktmeStatus (*pullAudio)(ktmeAudioSourceBase * src, size_t numFrames, ktmeFrameS32 * frames); \
-    ktmeStatus (*seek)(ktmeAudioSourceBase * src, ktmeSeekWhence whence, int32_t timeMS);        \
-    ktmeStatus (*stop)(ktmeAudioSourceBase * src)
+    ktmeStatus (*pullAudio)(ktmeAudioSourceBase *src, size_t numFrames, ktmeFrameS32 *frames); \
+    ktmeStatus (*seek)(ktmeAudioSourceBase *src, ktmeSeekWhence whence, int32_t timeMS);        \
+    ktmeStatus (*stop)(ktmeAudioSourceBase *src)
 
 typedef struct ktmeAudioSourceFuncs {
     KTME_AUDIO_SOURCE_BASE_FUNCS;
@@ -17,3 +17,7 @@ typedef struct ktmeAudioSourceFuncs {
 struct ktmeAudioSourceBase {
     const ktmeAudioSourceFuncs *m_funcs;
 };
+
+inline ktmeStatus ktmeAudioSourcePullAudio(ktmeAudioSourceBase *src, size_t numFrames, ktmeFrameS32 *frames) {
+    return src->m_funcs->pullAudio(src, numFrames, frames);
+}
