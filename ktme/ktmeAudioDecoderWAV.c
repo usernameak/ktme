@@ -1,9 +1,13 @@
 #include "ktmeAudioDecoderWAV.h"
 
+#include "ktmeAdpcmYamaha.h"
 #include "ktmeAudioDecoder.h"
 #include "ktmeRIFF.h"
 
+#include <assert.h>
 #include <string.h>
+
+#define KTME_ADPCM_DECODER_BUFFER_SIZE 512
 
 typedef enum ktmeWAVAudioCodec {
     KTME_WAV_AUDIO_CODEC_INVALID      = 0x0000,
@@ -34,6 +38,8 @@ struct ktmeAudioDecoderWAV {
     uint32_t m_dataOffset;
     uint32_t m_dataSize;
     uint32_t m_uncompressedDataSize;
+
+    ktmeAdpcmYamahaState m_adpcmYamahaState;
 };
 
 static const ktmeAudioDecoderFuncs g_audioDecoderWAVFuncs;
@@ -77,19 +83,47 @@ static ktmeStatus ktmeAudioDecoderWAVPullAudio(ktmeAudioSourceBase *src, size_t 
 
     ktmeStatus status;
 
-    size_t frameSize = self->m_numChannels * self->m_bitsPerSample / 8;
+    if (self->m_codec == KTME_WAV_AUDIO_CODEC_PCM) {
+        size_t frameSize = self->m_numChannels * self->m_bitsPerSample / 8;
 
-    uint32_t numRead;
-    KTME_CHECK_STATUS(ktmeDataSourceRead(self->m_dataSource, frames, numFrames * frameSize, &numRead));
+        uint32_t numRead;
+        KTME_CHECK_STATUS(ktmeDataSourceRead(self->m_dataSource, frames, numFrames * frameSize, &numRead));
 
-    if (numRead == 0) {
-        self->m_status = KTME_WAV_STATUS_OUT_OF_DATA;
-        return KTME_STATUS_NO_DATA;
-    }
+        if (numRead == 0) {
+            self->m_status = KTME_WAV_STATUS_OUT_OF_DATA;
+            return KTME_STATUS_NO_DATA;
+        }
 
-    uint32_t firstUnfulfilledFrame = numRead / frameSize;
-    if (firstUnfulfilledFrame < numFrames) {
-        memset(&((char *)frames)[firstUnfulfilledFrame * frameSize], 0, (numFrames - firstUnfulfilledFrame) * frameSize);
+        uint32_t firstUnfulfilledFrame = numRead / frameSize;
+        if (firstUnfulfilledFrame < numFrames) {
+            memset(&((char *)frames)[firstUnfulfilledFrame * frameSize], 0, (numFrames - firstUnfulfilledFrame) * frameSize);
+        }
+    } else if (self->m_codec == KTME_WAV_AUDIO_CODEC_YAMAHA_ADPCM) {
+        assert(numFrames % 2 == 0); // FIXME: improve in-place decode so that we don't need this
+
+        size_t pcmFrameSize = 2;
+        uint8_t *adpcmData  = (uint8_t *)frames +
+                             numFrames * pcmFrameSize / 2 +
+                             numFrames * pcmFrameSize / 4;
+        int16_t *pcmData = (int16_t *)frames;
+
+        uint32_t numRead;
+        KTME_CHECK_STATUS(ktmeDataSourceRead(self->m_dataSource, adpcmData, numFrames >> 1, &numRead));
+
+        if (numRead == 0) {
+            self->m_status = KTME_WAV_STATUS_OUT_OF_DATA;
+            return KTME_STATUS_NO_DATA;
+        }
+
+        for (uint32_t i = 0; i < numRead; i++) {
+            ktmeAdpcmYamahaDecodeTwoSamples(&self->m_adpcmYamahaState, adpcmData[i], &pcmData[i << 1]);
+        }
+
+        uint32_t firstUnfulfilledFrame = numRead * 2;
+        if (firstUnfulfilledFrame < numFrames) {
+            memset(&((char *)frames)[firstUnfulfilledFrame * pcmFrameSize], 0,
+                (numFrames - firstUnfulfilledFrame) * pcmFrameSize);
+        }
     }
 
     return KTME_STATUS_OK;
@@ -107,9 +141,10 @@ static ktmeStatus ktmeAudioDecoderWAVLinkDataSource(ktmeAudioDecoderBase *dec, k
         ktmeDataSourceRelease(self->m_dataSource);
     }
 
-    self->m_codec      = KTME_WAV_AUDIO_CODEC_INVALID;
-    self->m_status     = KTME_WAV_STATUS_READY;
-    self->m_dataSource = dataSource;
+    self->m_uncompressedDataSize = 0;
+    self->m_codec                = KTME_WAV_AUDIO_CODEC_INVALID;
+    self->m_status               = KTME_WAV_STATUS_READY;
+    self->m_dataSource           = dataSource;
     if (self->m_dataSource) {
         ktmeDataSourceAddRef(self->m_dataSource);
 
@@ -151,12 +186,33 @@ static ktmeStatus ktmeAudioDecoderWAVLinkDataSource(ktmeAudioDecoderBase *dec, k
                     KTME_CHECK_STATUS(ktmeDataSourceSkip(self->m_dataSource, size - 16));
                 }
 
-                if (audioFormat != KTME_WAV_AUDIO_CODEC_PCM ||
-                    numChannels == 0 || numChannels > 2 ||
-                    sampleRate == 0 || byteRate == 0 ||
-                    blockAlign == 0 ||
-                    (bitsPerSample != 8 && bitsPerSample != 16 && bitsPerSample != 24 && bitsPerSample != 32)) {
+                if (numChannels == 0 || numChannels > 2 ||
+                    blockAlign == 0 || bitsPerSample == 0 ||
+                    sampleRate == 0 || byteRate == 0)
+                {
+                    status = KTME_STATUS_UNSUPPORTED_CODEC;
+                    goto fail;
+                }
 
+                if (audioFormat == KTME_WAV_AUDIO_CODEC_PCM) {
+                    if (bitsPerSample != 8 &&
+                        bitsPerSample != 16 &&
+                        bitsPerSample != 24 &&
+                        bitsPerSample != 32)
+                    {
+                        status = KTME_STATUS_UNSUPPORTED_CODEC;
+                        goto fail;
+                    }
+                } else if (audioFormat == KTME_WAV_AUDIO_CODEC_YAMAHA_ADPCM) {
+                    if (bitsPerSample != 4) {
+                        status = KTME_STATUS_UNSUPPORTED_CODEC;
+                        goto fail;
+                    } else if (numChannels != 1) {
+                        // TODO: how is this even supposed to work?
+                        status = KTME_STATUS_UNSUPPORTED_CODEC;
+                        goto fail;
+                    }
+                } else {
                     status = KTME_STATUS_UNSUPPORTED_CODEC;
                     goto fail;
                 }
@@ -167,6 +223,19 @@ static ktmeStatus ktmeAudioDecoderWAVLinkDataSource(ktmeAudioDecoderBase *dec, k
                 self->m_byteRate      = byteRate;
                 self->m_blockAlign    = blockAlign;
                 self->m_bitsPerSample = bitsPerSample;
+            } else if (type == 0x74636166) { // 'fact'
+                if (size < 4) {
+                    status = KTME_STATUS_FORMAT_ERROR;
+                    goto fail;
+                }
+
+                uint32_t uncompressedDataSize;
+                KTME_CHECK_STATUS(ktmeDataSourceReadU32LE(self->m_dataSource, &uncompressedDataSize));
+                if (size > 4) {
+                    KTME_CHECK_STATUS(ktmeDataSourceSkip(self->m_dataSource, size - 4));
+                }
+
+                self->m_uncompressedDataSize = uncompressedDataSize;
             } else if (type == 0x61746164) { // 'data'
                 // check if we have a valid codec
                 // (otherwise, it might be that fmt is missing)
@@ -175,10 +244,15 @@ static ktmeStatus ktmeAudioDecoderWAVLinkDataSource(ktmeAudioDecoderBase *dec, k
                     goto fail;
                 }
 
+                if (self->m_codec == KTME_WAV_AUDIO_CODEC_YAMAHA_ADPCM) {
+                    // initialize the ADPCM decoder state
+                    ktmeAdpcmYamahaInitState(&self->m_adpcmYamahaState);
+                }
+
                 // save the offset and size
                 self->m_dataOffset = ktmeDataSourceTell(self->m_dataSource);
                 self->m_dataSize   = size;
-                if (self->m_codec == KTME_WAV_AUDIO_CODEC_PCM) {
+                if (self->m_codec == KTME_WAV_AUDIO_CODEC_PCM || self->m_uncompressedDataSize == 0) {
                     // PCM doesn't have 'fact' record
                     self->m_uncompressedDataSize = size;
                 }
@@ -206,21 +280,24 @@ fail:
 ktmeStatus ktmeAudioDecoderWAVGetCaps(ktmeAudioSourceBase *src, ktmeAudioSourceCaps *caps) {
     ktmeAudioDecoderWAV *self = (ktmeAudioDecoderWAV *)src;
 
-    if (self->m_codec == KTME_WAV_AUDIO_CODEC_INVALID) {
-        return KTME_STATUS_NOT_READY;
-    }
-
     caps->numChannels = self->m_numChannels;
     caps->sampleRate  = self->m_sampleRate;
-    switch (self->m_bitsPerSample) {
-    case 8: caps->sampleFormat = KTME_SAMPLE_FORMAT_U8; break;
-    case 16: caps->sampleFormat = KTME_SAMPLE_FORMAT_S16; break;
-    case 24: caps->sampleFormat = KTME_SAMPLE_FORMAT_S24; break;
-    case 32: caps->sampleFormat = KTME_SAMPLE_FORMAT_S32; break;
-    default: return KTME_STATUS_UNSUPPORTED_CODEC; // nope.
+    if (self->m_codec == KTME_WAV_AUDIO_CODEC_PCM) {
+        switch (self->m_bitsPerSample) {
+        case 8: caps->sampleFormat = KTME_SAMPLE_FORMAT_U8; break;
+        case 16: caps->sampleFormat = KTME_SAMPLE_FORMAT_S16; break;
+        case 24: caps->sampleFormat = KTME_SAMPLE_FORMAT_S24; break;
+        case 32: caps->sampleFormat = KTME_SAMPLE_FORMAT_S32; break;
+        default: return KTME_STATUS_UNSUPPORTED_CODEC; // nope.
+        }
+        return KTME_STATUS_OK;
+    }
+    if (self->m_codec == KTME_WAV_AUDIO_CODEC_YAMAHA_ADPCM) {
+        caps->sampleFormat = KTME_SAMPLE_FORMAT_S16;
+        return KTME_STATUS_OK;
     }
 
-    return KTME_STATUS_OK;
+    return KTME_STATUS_NOT_READY;
 }
 
 static const ktmeAudioDecoderFuncs g_audioDecoderWAVFuncs = {

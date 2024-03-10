@@ -27,7 +27,9 @@ add_library(ktme STATIC
         ktmeDataSourceFile.h
         ktmeAudioResampler.c
         ktmeAudioResampler.h
-        ktmeAudioSource.c)
+        ktmeAudioSource.c
+        ktmeAdpcmYamaha.c
+        ktmeAdpcmYamaha.h)
 
 if (portaudio_FOUND)
     target_link_libraries(ktme PUBLIC portaudio)

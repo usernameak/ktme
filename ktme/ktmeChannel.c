@@ -23,7 +23,7 @@ void ktmeChannelFree(ktmeChannel *chan) {
 ktmeStatus ktmeChannelPullAudioData(ktmeChannel *chan, size_t numFrames, ktmeFrameS32 *frames) {
     if (chan->m_status == KTME_CHANNEL_STATUS_PAUSED ||
         chan->m_status == KTME_CHANNEL_STATUS_FREE ||
-        chan->m_audioSource == NULL) {
+        chan->m_effectiveAudioSource == NULL) {
         return KTME_STATUS_NO_DATA;
     }
 
