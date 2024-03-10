@@ -62,13 +62,6 @@ static ktmeStatus ktmeAudioDecoderWAVStop(ktmeAudioSourceBase *src) {
     return KTME_STATUS_UNSUPPORTED;
 }
 
-// shittiest macro in the world - worse than what i had in GroveEngine2
-#define KTME_CHECK_STATUS(...)                   \
-    do {                                         \
-        status = (__VA_ARGS__);                  \
-        if (status != KTME_STATUS_OK) goto fail; \
-    } while (0)
-
 static ktmeStatus ktmeAudioDecoderWAVPullAudio(ktmeAudioSourceBase *src, size_t numFrames, void *frames) {
     ktmeAudioDecoderWAV *self = (ktmeAudioDecoderWAV *)src;
 

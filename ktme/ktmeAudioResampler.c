@@ -37,10 +37,15 @@ ktmeStatus ktmeAudioResamplerPullAudio(ktmeAudioSourceBase *src, size_t numFrame
         uint32_t framesToPull = framesRemaining > framesPerBuffer ? framesPerBuffer : framesRemaining;
 
         status = ktmeAudioSourcePullAudio(self->m_source, framesToPull, self->m_buffer);
-        if (status == KTME_STATUS_NO_DATA) goto finished;
+        if (status == KTME_STATUS_NO_DATA) {
+            if (currentPosition == 0) return KTME_STATUS_NO_DATA;
+
+            memset(&framesOut[currentPosition], 0, framesRemaining * sizeof(ktmeFrameS32));
+            goto finished;
+        }
         if (status != KTME_STATUS_OK) return status;
 
-        for (size_t i = 0; i < numFrames; i++) {
+        for (size_t i = 0; i < framesToPull; i++) {
             uint32_t k = i + currentPosition;
 
             if (caps.numChannels == 1) {

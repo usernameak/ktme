@@ -9,6 +9,7 @@ typedef struct ktmeAudioResampler {
     ktmeAudioSourceBase *m_source;
 
     uint8_t m_buffer[1024];
+    ktmeFrameS32 m_resampleInputBuffer[1024];
 } ktmeAudioResampler;
 
 ktmeAudioResampler *ktmeAudioResamplerCreate(ktmeEngine *engine);

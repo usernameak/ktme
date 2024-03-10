@@ -30,3 +30,10 @@ typedef enum ktmeSeekWhence {
 #else
 #define KTME_FORCEINLINE inline
 #endif
+
+// shittiest macro in the world - worse than what i had in GroveEngine2
+#define KTME_CHECK_STATUS(...)                   \
+    do {                                         \
+        status = (__VA_ARGS__);                  \
+        if (status != KTME_STATUS_OK) goto fail; \
+    } while (0)
