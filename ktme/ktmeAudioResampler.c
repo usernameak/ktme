@@ -75,7 +75,7 @@ ktmeStatus ktmeAudioResamplerPullAudio(ktmeAudioSourceBase *src, size_t numFrame
                 } else {
                     return KTME_STATUS_UNSUPPORTED_CODEC;
                 }
-            } else {
+            } else if (caps.numChannels == 2) {
                 if (caps.sampleFormat == KTME_SAMPLE_FORMAT_U8) {
                     framesOut[k].left  = (int32_t)(int8_t)(uint8_t)(self->m_buffer[i * 2] + 128u) << 24;
                     framesOut[k].right = (int32_t)(int8_t)(uint8_t)(self->m_buffer[i * 2 + 1] + 128u) << 24;
@@ -107,6 +107,8 @@ ktmeStatus ktmeAudioResamplerPullAudio(ktmeAudioSourceBase *src, size_t numFrame
                 } else {
                     return KTME_STATUS_UNSUPPORTED_CODEC;
                 }
+            } else {
+                return KTME_STATUS_UNSUPPORTED_CODEC;
             }
         }
 
