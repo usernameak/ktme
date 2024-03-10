@@ -16,7 +16,7 @@ ktmeMixer *ktmeMixerCreate(ktmeEngine *engine, uint32_t numChannels) {
     mixer->m_numActiveChannels = 0;
     mixer->m_channels          = ktmeEngineMemAlloc(engine, sizeof(ktmeChannel) * mixer->m_numChannels);
     for (uint32_t i = 0; i < mixer->m_numChannels; i++) {
-        ktmeChannelInit(&mixer->m_channels[i]);
+        ktmeChannelInit(engine, &mixer->m_channels[i]);
     }
 
     mixer->m_mixBufferSize = 1024;

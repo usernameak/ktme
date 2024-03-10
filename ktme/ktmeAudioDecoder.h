@@ -14,3 +14,7 @@ typedef struct ktmeAudioDecoderFuncs {
 struct ktmeAudioDecoderBase {
     const ktmeAudioDecoderFuncs *m_funcs;
 };
+
+inline ktmeStatus ktmeAudioDecoderLinkDataSource(ktmeAudioDecoderBase *self, ktmeDataSource *dataSource) {
+    return self->m_funcs->linkDataSource(self, dataSource);
+}

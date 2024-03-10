@@ -1,3 +1,8 @@
+#include "ktmeAudioDecoder.h"
+#include "ktmeAudioDecoderWAV.h"
+#include "ktmeChannel.h"
+#include "ktmeDataSourceFile.h"
+
 #include <stdlib.h>
 
 #include <ktmeMixer.h>
@@ -22,13 +27,26 @@ int main(int argc, char **argv) {
     ktmeAudioOutPortAudio *ao = ktmeAudioOutPortAudioCreate(engine);
     ktmeMixerLinkAudioOutput(mixer, (ktmeAudioOutBase *)ao);
 
+    ktmeStatus status;
+
+    ktmeDataSourceFile *wavFile = ktmeDataSourceFileCreate(engine, "test.wav", &status);
+    if (status != KTME_STATUS_OK) {
+        printf("error: file load failed\n");
+        return 1;
+    }
+
+    ktmeAudioDecoderWAV *wavDecoder = ktmeAudioDecoderWAVCreate(engine);
+    ktmeAudioDecoderLinkDataSource((ktmeAudioDecoderBase *)wavDecoder, (ktmeDataSource *)wavFile);
+
+    ktmeDataSourceRelease((ktmeDataSource *)wavFile);
+
     ktmeChannel *chan = ktmeMixerChannelAlloc(mixer);
-
+    ktmeChannelSetAudioSource(chan, (ktmeAudioSourceBase *)wavDecoder);
     ktmeMixerChannelPlay(mixer, chan);
-
-    Sleep(1000);
-
+    Sleep(10000);
     ktmeMixerChannelFree(mixer, chan);
+
+    ktmeAudioDecoderWAVDestroy(wavDecoder);
 
     ktmeAudioOutPortAudioDestroy(ao);
     ktmeMixerDestroy(mixer);

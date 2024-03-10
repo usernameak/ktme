@@ -22,7 +22,12 @@ add_library(ktme STATIC
         ktmeDataSource.h
         ktmeRIFF.h
         ktmeRIFF.c
-        ktmeDataSource.c)
+        ktmeDataSource.c
+        ktmeDataSourceFile.c
+        ktmeDataSourceFile.h
+        ktmeAudioResampler.c
+        ktmeAudioResampler.h
+        ktmeAudioSource.c)
 
 if (portaudio_FOUND)
     target_link_libraries(ktme PUBLIC portaudio)
@@ -30,6 +35,10 @@ if (portaudio_FOUND)
     target_sources(ktme PRIVATE
             ktmeAoPortAudio.c
             ktmeAoPortAudio.h)
+endif ()
+
+if (MSVC)
+    target_compile_definitions(ktme PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif ()
 
 target_include_directories(ktme INTERFACE

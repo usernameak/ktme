@@ -16,9 +16,10 @@ typedef enum ktmeWAVStatus {
     KTME_WAV_STATUS_OUT_OF_DATA
 } ktmeWAVStatus;
 
-typedef struct ktmeAudioDecoderWAV {
+struct ktmeAudioDecoderWAV {
     const ktmeAudioDecoderFuncs *m_funcs;
 
+    ktmeEngine *m_engine;
     ktmeDataSource *m_dataSource;
 
     ktmeWAVStatus m_status;
@@ -33,9 +34,25 @@ typedef struct ktmeAudioDecoderWAV {
     uint32_t m_dataOffset;
     uint32_t m_dataSize;
     uint32_t m_uncompressedDataSize;
-} ktmeAudioDecoderWAV;
+};
 
 static const ktmeAudioDecoderFuncs g_audioDecoderWAVFuncs;
+
+ktmeAudioDecoderWAV *ktmeAudioDecoderWAVCreate(ktmeEngine *engine) {
+    ktmeAudioDecoderWAV *codec = ktmeEngineMemAlloc(engine, sizeof(ktmeAudioDecoderWAV));
+    memset(codec, 0, sizeof(ktmeAudioDecoderWAV));
+    codec->m_funcs  = &g_audioDecoderWAVFuncs;
+    codec->m_engine = engine;
+    return codec;
+}
+
+void ktmeAudioDecoderWAVDestroy(ktmeAudioDecoderWAV *codec) {
+    if (codec->m_dataSource) {
+        ktmeDataSourceRelease(codec->m_dataSource);
+    }
+
+    ktmeEngineMemFree(codec->m_engine, codec);
+}
 
 static ktmeStatus ktmeAudioDecoderWAVSeek(ktmeAudioSourceBase *src, ktmeSeekWhence whence, int32_t timeMS) {
     return KTME_STATUS_UNSUPPORTED;
@@ -52,7 +69,7 @@ static ktmeStatus ktmeAudioDecoderWAVStop(ktmeAudioSourceBase *src) {
         if (status != KTME_STATUS_OK) goto fail; \
     } while (0)
 
-static ktmeStatus ktmeAudioDecoderWAVPullAudio(ktmeAudioSourceBase *src, size_t numFrames, ktmeFrameS32 *frames) {
+static ktmeStatus ktmeAudioDecoderWAVPullAudio(ktmeAudioSourceBase *src, size_t numFrames, void *frames) {
     ktmeAudioDecoderWAV *self = (ktmeAudioDecoderWAV *)src;
 
     if (self->m_dataSource == NULL) {
@@ -67,17 +84,19 @@ static ktmeStatus ktmeAudioDecoderWAVPullAudio(ktmeAudioSourceBase *src, size_t 
 
     ktmeStatus status;
 
+    size_t frameSize = self->m_numChannels * self->m_bitsPerSample / 8;
+
     uint32_t numRead;
-    KTME_CHECK_STATUS(ktmeDataSourceRead(self->m_dataSource, frames, numFrames * sizeof(ktmeFrameS32), &numRead));
+    KTME_CHECK_STATUS(ktmeDataSourceRead(self->m_dataSource, frames, numFrames * frameSize, &numRead));
 
     if (numRead == 0) {
         self->m_status = KTME_WAV_STATUS_OUT_OF_DATA;
         return KTME_STATUS_NO_DATA;
     }
 
-    uint32_t firstUnfulfilledFrame = numRead / sizeof(ktmeFrameS32);
+    uint32_t firstUnfulfilledFrame = numRead / frameSize;
     if (firstUnfulfilledFrame < numFrames) {
-        memset(&frames[firstUnfulfilledFrame], 0, (numFrames - firstUnfulfilledFrame) * sizeof(ktmeFrameS32));
+        memset(&((char *)frames)[firstUnfulfilledFrame * frameSize], 0, (numFrames - firstUnfulfilledFrame) * frameSize);
     }
 
     return KTME_STATUS_OK;
@@ -191,9 +210,30 @@ fail:
     return status;
 }
 
+ktmeStatus ktmeAudioDecoderWAVGetCaps(ktmeAudioSourceBase *src, ktmeAudioSourceCaps *caps) {
+    ktmeAudioDecoderWAV *self = (ktmeAudioDecoderWAV *)src;
+
+    if (self->m_codec == KTME_WAV_AUDIO_CODEC_INVALID) {
+        return KTME_STATUS_NOT_READY;
+    }
+
+    caps->numChannels = self->m_numChannels;
+    caps->sampleRate  = self->m_sampleRate;
+    switch (self->m_bitsPerSample) {
+    case 8: caps->sampleFormat = KTME_SAMPLE_FORMAT_U8; break;
+    case 16: caps->sampleFormat = KTME_SAMPLE_FORMAT_S16; break;
+    case 24: caps->sampleFormat = KTME_SAMPLE_FORMAT_S24; break;
+    case 32: caps->sampleFormat = KTME_SAMPLE_FORMAT_S32; break;
+    default: return KTME_STATUS_UNSUPPORTED_CODEC; // nope.
+    }
+
+    return KTME_STATUS_OK;
+}
+
 static const ktmeAudioDecoderFuncs g_audioDecoderWAVFuncs = {
     .pullAudio      = ktmeAudioDecoderWAVPullAudio,
     .seek           = ktmeAudioDecoderWAVSeek,
     .stop           = ktmeAudioDecoderWAVStop,
-    .linkDataSource = ktmeAudioDecoderWAVLinkDataSource
+    .linkDataSource = ktmeAudioDecoderWAVLinkDataSource,
+    .getCaps        = ktmeAudioDecoderWAVGetCaps
 };
